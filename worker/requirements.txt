@@ -1,0 +1,16 @@
+# -- Librerías para la comunicación con RabbitMQ --
+pika
+
+# -- Librerías para la API de Google Drive --
+google-api-python-client
+google-auth-httplib2
+google-auth-oauthlib
+
+# -- La librería ESENCIAL para el SDK de Gemini --
+google-generativeai
+langchain
+langchain-google-genai
+
+
+
+httpx

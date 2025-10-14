@@ -1,0 +1,97 @@
+services:
+  # --- ¡NUEVO! Servicio de Traefik ---
+  # El reverse proxy que actuará como punto de entrada a nuestra aplicación.
+  traefik:
+    image: "traefik:v3.1"
+    container_name: traefik
+    command:
+      # Habilita el "provider" de Docker para que Traefik descubra otros contenedores.
+      - "--providers.docker=true"
+      # No expone los servicios automáticamente por seguridad.
+      - "--providers.docker.exposedbydefault=false"
+      # Define un punto de entrada para el tráfico web en el puerto 80.
+      - "--entrypoints.web.address=:80"
+      # Habilita el dashboard de Traefik (opcional pero útil).
+      - "--api.dashboard=true"
+      - "--api.insecure=true" # No usar en producción
+    ports:
+      # Expone el puerto 80 de Traefik a nuestra máquina para el tráfico web.
+      - "80:80"
+      # Expone el puerto del dashboard de Traefik.
+      - "8080:8080"
+    volumes:
+      # Permite a Traefik escuchar los eventos de Docker para descubrir servicios.
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+    networks:
+      - app-network
+
+  # --- RabbitMQ ---
+  rabbitmq:
+    image: "rabbitmq:3.13-management"
+    hostname: "rabbitmq"
+    environment:
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_USER}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASS}
+    # Ya no exponemos los puertos de RabbitMQ directamente. Traefik se encarga.
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - app-network
+    # --- Etiquetas para que Traefik exponga el dashboard de RabbitMQ ---
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.rabbitmq.rule=Host(`rabbitmq.localhost`)"
+      - "traefik.http.services.rabbitmq.loadbalancer.server.port=15672"
+
+  # --- API Service ---
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: drive-api
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    # Ya no exponemos el puerto 8000 directamente. Traefik se encarga.
+    volumes:
+      - ./api:/app
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - app-network
+    env_file:
+      - .env
+    # --- ¡NUEVO! Etiquetas para que Traefik encuentre la API ---
+    labels:
+      - "traefik.enable=true"
+      # Regla: si el host es "wai.localhost", envía el tráfico aquí.
+      - "traefik.http.routers.wai-api.rule=Host(`wai.localhost`)"
+      # Define el punto de entrada (el puerto 80 que abrimos en Traefik).
+      - "traefik.http.routers.wai-api.entrypoints=web"
+      # Le dice a Traefik que este servicio escucha internamente en el puerto 8000.
+      - "traefik.http.services.wai-api.loadbalancer.server.port=8000"
+
+  # --- Worker Service (sin cambios) ---
+  worker:
+    build:
+      context: ./worker
+      dockerfile: Dockerfile
+    container_name: drive-worker
+    command: python3 main.py
+    volumes:
+      - ./worker:/app
+      - ./shared:/app/shared
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - app-network
+    env_file:
+      - .env
+    restart: on-failure
+
+networks:
+  app-network:
+    driver: bridge
