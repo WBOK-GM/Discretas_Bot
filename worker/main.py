@@ -5,11 +5,8 @@ import os
 import pickle
 import traceback
 import sys
-# --- ¡IMPORTACIONES ACTUALIZADAS! ---
-# Ya no necesitamos LLMChain. PromptTemplate ahora viene de langchain.prompts
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.prompts import PromptTemplate
-# ---
 import httpx
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -64,31 +61,39 @@ def search_drive_files(query):
     except Exception as e:
         return f"Ha ocurrido un error al buscar en Google Drive: {e}"
 
-# --- ¡FUNCIÓN MODERNIZADA CON LANGCHAIN RUNNABLES! ---
+# --- ¡FUNCIÓN ACTUALIZADA CON PROMPT MÁS INTELIGENTE! ---
 def generate_drive_query(user_prompt):
-    """Usa la sintaxis moderna de LangChain (RunnableSequence) para traducir la petición."""
+    """Usa LangChain para traducir la petición a un query o identificarla como inválida."""
     try:
-        # 1. Definimos la plantilla del prompt (sin cambios)
+        # --- ¡PROMPT MEJORADO! ---
+        # Le enseñamos a Gemini a devolver 'INVALID_QUERY' si no es una búsqueda.
         template = """
         Traduce la siguiente petición a una consulta técnica para la API de Google Drive.
-        Responde ÚNICAMENTE con la consulta técnica.
-        IMPORTANTE: No incluyas NUNCA acentos graves (`) ni ningún tipo de formato de código.
+        Si la petición no parece una solicitud para buscar archivos, responde con la palabra clave 'INVALID_QUERY'.
+        Responde ÚNICAMENTE con la consulta técnica o con 'INVALID_QUERY'.
+        No incluyas NUNCA acentos graves (`) ni ningún tipo de formato de código.
+
+        Ejemplos:
+        Petición: "búscame el informe de ventas en pdf"
+        Respuesta: name contains 'informe de ventas' and mimeType='application/pdf'
+
+        Petición: "hola como estas"
+        Respuesta: INVALID_QUERY
+        
+        Petición: "¿qué tiempo hace?"
+        Respuesta: INVALID_QUERY
 
         Petición: "{peticion_usuario}"
         Respuesta: 
         """
         prompt_template = PromptTemplate(input_variables=["peticion_usuario"], template=template)
         
-        # 2. Inicializamos el modelo (sin cambios)
         llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", google_api_key=API_KEY)
         
-        # 3. ¡LA NUEVA SINTAXIS! Creamos la cadena usando el operador de tubería '|'
         chain = prompt_template | llm
         
-        # 4. Ejecutamos la cadena (la entrada es la misma)
         response = chain.invoke({"peticion_usuario": user_prompt})
         
-        # La salida de los nuevos modelos de chat está en el atributo .content
         drive_query = response.content.strip()
         
         print(f"[Worker] Query de LangChain: '{drive_query}'")
@@ -99,7 +104,16 @@ def generate_drive_query(user_prompt):
         traceback.print_exc()
         return None
 
-# ... (El resto del código: callback, send_telegram_message, main, no cambian) ...
+def send_telegram_message(chat_id, text):
+    telegram_api_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    payload = {"chat_id": chat_id, "text": text, "parse_mode": "Markdown"}
+    try:
+        with httpx.Client() as client:
+            client.post(telegram_api_url, json=payload)
+    except Exception as e:
+        print(f"[Worker] Excepción al enviar mensaje a Telegram: {e}")
+
+# --- ¡FUNCIÓN CALLBACK ACTUALIZADA! ---
 def callback(ch, method, properties, body):
     message = json.loads(body)
     chat_id = message.get("chat_id")
@@ -110,24 +124,22 @@ def callback(ch, method, properties, body):
         ch.basic_ack(delivery_tag=method.delivery_tag)
         return
 
+    # No enviamos el mensaje de "cargando" si no es una búsqueda válida
+    
     drive_query = generate_drive_query(user_prompt)
     
-    if drive_query:
+    # --- ¡NUEVA LÓGICA DE RESPUESTA! ---
+    if drive_query is None:
+        send_telegram_message(chat_id, "Lo siento, hubo un error al procesar tu petición.")
+    elif drive_query == "INVALID_QUERY":
+        send_telegram_message(chat_id, "No entendí tu solicitud. Por favor, pídeme que busque un archivo o documento en tu Drive.")
+    else:
+        # Solo si la consulta es válida, enviamos el "cargando" y buscamos
+        send_telegram_message(chat_id, "Buscando en tu Drive, un momento...")
         search_results = search_drive_files(drive_query)
         send_telegram_message(chat_id, search_results)
-    else:
-        send_telegram_message(chat_id, "Lo siento, no he podido procesar tu petición en este momento.")
     
     ch.basic_ack(delivery_tag=method.delivery_tag)
-
-def send_telegram_message(chat_id, text):
-    telegram_api_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    payload = {"chat_id": chat_id, "text": text, "parse_mode": "Markdown"}
-    try:
-        with httpx.Client() as client:
-            client.post(telegram_api_url, json=payload)
-    except Exception as e:
-        print(f"[Worker] Excepción al enviar mensaje a Telegram: {e}")
 
 def main():
     connection = None
