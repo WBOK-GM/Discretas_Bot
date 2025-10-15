@@ -113,7 +113,6 @@ def send_telegram_message(chat_id, text):
     except Exception as e:
         print(f"[Worker] Excepción al enviar mensaje a Telegram: {e}")
 
-# --- ¡FUNCIÓN CALLBACK ACTUALIZADA! ---
 def callback(ch, method, properties, body):
     message = json.loads(body)
     chat_id = message.get("chat_id")
@@ -124,17 +123,14 @@ def callback(ch, method, properties, body):
         ch.basic_ack(delivery_tag=method.delivery_tag)
         return
 
-    # No enviamos el mensaje de "cargando" si no es una búsqueda válida
     
     drive_query = generate_drive_query(user_prompt)
     
-    # --- ¡NUEVA LÓGICA DE RESPUESTA! ---
     if drive_query is None:
         send_telegram_message(chat_id, "Lo siento, hubo un error al procesar tu petición.")
     elif drive_query == "INVALID_QUERY":
         send_telegram_message(chat_id, "No entendí tu solicitud. Por favor, pídeme que busque un archivo o documento en tu Drive.")
     else:
-        # Solo si la consulta es válida, enviamos el "cargando" y buscamos
         send_telegram_message(chat_id, "Buscando en tu Drive, un momento...")
         search_results = search_drive_files(drive_query)
         send_telegram_message(chat_id, search_results)
