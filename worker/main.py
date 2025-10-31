@@ -61,12 +61,8 @@ def search_drive_files(query):
     except Exception as e:
         return f"Ha ocurrido un error al buscar en Google Drive: {e}"
 
-# --- ¡FUNCIÓN ACTUALIZADA CON PROMPT MÁS INTELIGENTE! ---
 def generate_drive_query(user_prompt):
-    """Usa LangChain para traducir la petición a un query o identificarla como inválida."""
     try:
-        # --- ¡PROMPT MEJORADO! ---
-        # Le enseñamos a Gemini a devolver 'INVALID_QUERY' si no es una búsqueda.
         template = """
         Traduce la siguiente petición a una consulta técnica para la API de Google Drive.
         Si la petición no parece una solicitud para buscar archivos, responde con la palabra clave 'INVALID_QUERY'.

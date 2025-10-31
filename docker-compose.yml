@@ -46,10 +46,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.wai-api.rule=PathPrefix(`/api`)"
-      # --- ¡LA CORRECCIÓN MÁGICA! ---
-      # 1. Creamos un "middleware" que sabe cómo quitar el prefijo /api.
       - "traefik.http.middlewares.strip-api-prefix.stripprefix.prefixes=/api"
-      # 2. Le decimos al router que use ese middleware.
       - "traefik.http.routers.wai-api.middlewares=strip-api-prefix"
       - "traefik.http.services.wai-api.loadbalancer.server.port=8000"
 
