@@ -28,6 +28,7 @@ El proyecto sigue una arquitectura de microservicios con los siguientes componen
 - Bot de Telegram creado (obtén el token desde [@BotFather](https://t.me/botfather))
 - API Key de Google Gemini AI
 - Credenciales OAuth2 de Google Cloud para acceso a Drive API
+- **Ngrok instalado** si trabajas en local
 
 ### Configuración
 
@@ -64,15 +65,25 @@ RABBITMQ_PASS=tu_contraseña_segura
 
 4. **Inicia los contenedores**:
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
-5. **Configura el webhook de Telegram**:
+5. **Crea el túnel ngrok en el puerto 80**
 
-Una vez que los servicios estén corriendo, configura el webhook:
+Si trabajas en local y quieres recibir el webhook correctamente, abre un túnel ngrok:
 
 ```bash
-curl -X POST "https://api.telegram.org/bot<TU_TOKEN>/setWebhook?url=http://tu-dominio.com/api/webhook/<TU_TOKEN>"
+ngrok http 80
+```
+
+Obtén la URL pública generada por ngrok.
+
+6. **Configura el webhook de Telegram**:
+
+Usa la URL pública de ngrok para configurar el webhook:
+
+```bash
+curl -X POST "https://api.telegram.org/bot<TU_TOKEN>/setWebhook?url=https://tu-url-ngrok/api/webhook/<TU_TOKEN>"
 ```
 
 ## 📦 Estructura del Proyecto
@@ -108,26 +119,11 @@ Una vez configurado el bot, puedes interactuar con él enviando mensajes como:
 
 El bot interpretará tu solicitud y buscará en tu Google Drive, devolviendo enlaces directos a los archivos encontrados.
 
-## 🔧 Endpoints Disponibles
-
-### API
-
-- `GET /`: Endpoint de verificación del servicio
-- `POST /webhook/{TELEGRAM_BOT_TOKEN}`: Webhook para recibir actualizaciones de Telegram
-
-### Traefik Dashboard
-
-- Dashboard disponible en: `http://localhost:8080` (modo inseguro para desarrollo)
-
-### RabbitMQ Management
-
-- Panel de administración: `http://localhost/rabbitmq`
-
 ## 🛠️ Desarrollo
 
 ### Reconstruir contenedores
 ```bash
-docker-compose up -d --build
+docker compose up -d --build
 ```
 
 ### Ver logs del Worker
@@ -142,7 +138,7 @@ docker logs -f drive-api
 
 ### Detener servicios
 ```bash
-docker-compose down
+docker compose down
 ```
 
 ## 🔐 Seguridad
@@ -170,16 +166,16 @@ Este proyecto está bajo la licencia MIT. Consulta el archivo `LICENSE` para má
 
 **WBOK-GM**
 
-- GitHub: [@WBOK-GM](https://github.com/WBOK-GM)
+- GitHub: https://github.com/WBOK-GM
 
 ## 🙏 Agradecimientos
 
-- [FastAPI](https://fastapi.tiangolo.com/) - Framework web moderno y rápido
-- [Langchain](https://www.langchain.com/) - Framework para aplicaciones con LLMs
-- [Google Gemini AI](https://deepmind.google/technologies/gemini/) - Modelo de lenguaje para interpretación de consultas
-- [Telegram Bot API](https://core.telegram.org/bots/api) - API para bots de Telegram
-- [RabbitMQ](https://www.rabbitmq.com/) - Sistema de mensajería
-- [Traefik](https://traefik.io/) - Reverse proxy moderno
+- FastAPI - Framework web moderno y rápido
+- Langchain - Framework para aplicaciones con LLMs
+- Google Gemini AI - Modelo de lenguaje para interpretación de consultas
+- Telegram Bot API - API para bots de Telegram
+- RabbitMQ - Sistema de mensajería
+- Traefik - Reverse proxy moderno
 
 ---
 
